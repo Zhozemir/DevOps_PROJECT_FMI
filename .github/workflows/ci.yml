@@ -39,8 +39,9 @@ jobs:
       - name: Set image name (lowercase)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: vars
+        shell: bash
         run: |
-          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/${GITHUB_REPOSITORY##*/,,}" >> $GITHUB_OUTPUT
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
