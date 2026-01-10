@@ -64,3 +64,35 @@ jobs:
           tags: |
             ${{ steps.vars.outputs.IMAGE }}:latest
             ${{ steps.vars.outputs.IMAGE }}:sha-${{ github.sha }}
+            
+  deploy-to-k8s:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-and-test
+    runs-on: [self-hosted, Windows, X64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write kubeconfig from secret
+        shell: pwsh
+        run: |
+          $kubeconfigPath = Join-Path $env:RUNNER_TEMP "kubeconfig"
+          "${{ secrets.KUBECONFIG }}" | Out-File -FilePath $kubeconfigPath -Encoding utf8
+          "KUBECONFIG=$kubeconfigPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Set image name (lowercase)
+        shell: pwsh
+        run: |
+          $img = "ghcr.io/${{ github.repository }}".ToLower()
+          "IMAGE=$img" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Deploy manifests
+        shell: pwsh
+        run: |
+          kubectl apply -f k8s/deployment.yml
+          kubectl apply -f k8s/service.yml
+          kubectl set image deployment/devops-project-fmi app="${env:IMAGE}:sha-${{ github.sha }}"
+          kubectl rollout status deployment/devops-project-fmi
+          kubectl get pods -l app=devops-project-fmi
+
