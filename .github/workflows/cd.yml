@@ -1,0 +1,48 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: ["SAST (SonarCloud)"]
+    branches: ["main"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-to-k8s:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: [ self-hosted, Windows, X64 ]
+
+    defaults:
+      run:
+        shell: powershell
+
+    steps:
+      - name: Checkout (same commit from SAST)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Write kubeconfig from secret
+        run: |
+          $kubeconfigPath = Join-Path $env:RUNNER_TEMP "kubeconfig"
+          @'
+          ${{ secrets.KUBECONFIG }}
+          '@ | Set-Content -Path $kubeconfigPath -Encoding UTF8
+          Add-Content $env:GITHUB_ENV "KUBECONFIG=$kubeconfigPath"
+
+      - name: Set image name + deploy sha
+        run: |
+          $img = ("ghcr.io/${{ github.repository }}").ToLower()
+          Add-Content $env:GITHUB_ENV "IMAGE=$img"
+          Add-Content $env:GITHUB_ENV "DEPLOY_SHA=${{ github.event.workflow_run.head_sha }}"
+
+      - name: Deploy manifests
+        run: |
+          kubectl apply -f k8s/deployment.yml
+          kubectl apply -f k8s/service.yml
+          kubectl set image deployment/devops-project-fmi app="$($env:IMAGE):sha-$($env:DEPLOY_SHA)"
+          kubectl annotate deployment/devops-project-fmi kubernetes.io/change-cause="deploy sha-$($env:DEPLOY_SHA)" --overwrite
+          kubectl rollout status deployment/devops-project-fmi
+          kubectl get pods -l app=devops-project-fmi
