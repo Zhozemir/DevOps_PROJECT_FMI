@@ -34,14 +34,17 @@ jobs:
       - name: Build & Test
         run: ./mvnw -B clean test
 
-      - name: SonarCloud Scan
+      - name: SonarCloud Scan (SAST)
         if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./mvnw -B -DskipTests=true org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
-          -Dsonar.host.url=https://sonarcloud.io \
-          -Dsonar.organization=zhozemir \
-          -Dsonar.projectKey=Zhozemir_DevOps_PROJECT_FMI
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./mvnw -B -DskipTests \
+            -Dsonar.host.url="https://sonarcloud.io" \
+            -Dsonar.organization="zhozemir" \
+            -Dsonar.projectKey="Zhozemir_DevOps_PROJECT_FMI" \
+            org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar
 
       - name: Docker build
         if: github.event_name == 'pull_request'
