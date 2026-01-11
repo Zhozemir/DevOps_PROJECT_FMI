@@ -3,11 +3,8 @@ name: SAST (SonarCloud)
 on:
   pull_request:
     branches: [ "main" ]
-
-  workflow_run:
-    workflows: ["CI"]
-    branches: ["main"]
-    types: [completed]
+  push:
+    branches: [ "main" ]
 
 permissions:
   contents: read
@@ -15,22 +12,12 @@ permissions:
 
 jobs:
   sonarcloud:
-    # за workflow_run: пускай само ако CI е success
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout (PR)
-        if: ${{ github.event_name == 'pull_request' }}
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-
-      - name: Checkout (from CI run)
-        if: ${{ github.event_name == 'workflow_run' }}
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
       - name: Set up Java 17
@@ -43,6 +30,9 @@ jobs:
       - name: Make mvnw executable
         run: chmod +x mvnw
 
+      - name: Compile (needed for Sonar Java analysis)
+        run: ./mvnw -B -DskipTests clean compile
+
       - name: SonarCloud Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -52,4 +42,5 @@ jobs:
             -Dsonar.host.url="https://sonarcloud.io" \
             -Dsonar.organization="zhozemir" \
             -Dsonar.projectKey="Zhozemir_DevOps_PROJECT_FMI" \
+            -Dsonar.java.binaries="target/classes" \
             org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar
