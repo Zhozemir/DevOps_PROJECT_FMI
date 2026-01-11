@@ -2,12 +2,13 @@ name: CD
 
 on:
   workflow_run:
-    workflows: ["SAST (SonarCloud)"]
+    workflows: ["CI"]
     branches: ["main"]
     types: [completed]
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   deploy-to-k8s:
@@ -19,10 +20,31 @@ jobs:
         shell: powershell
 
     steps:
-      - name: Checkout (same commit from SAST)
+      - name: Checkout (same commit from CI)
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Ensure SAST passed for this commit
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $sha = "${{ github.event.workflow_run.head_sha }}"
+          $repo = "${{ github.repository }}"
+
+          $headers = @{
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            Accept        = "application/vnd.github+json"
+          }
+
+          $url = "https://api.github.com/repos/$repo/actions/workflows/sast.yml/runs?branch=main&event=push&per_page=50"
+          $resp = Invoke-RestMethod -Uri $url -Headers $headers
+
+          $run = $resp.workflow_runs | Where-Object { $_.head_sha -eq $sha } | Select-Object -First 1
+          if (-not $run) { throw "No SAST run found for sha=$sha" }
+          if ($run.conclusion -ne "success") { throw "SAST not successful for sha=$sha. conclusion=$($run.conclusion)" }
+
+          Write-Host "SAST passed for $sha"
 
       - name: Write kubeconfig from secret
         run: |
