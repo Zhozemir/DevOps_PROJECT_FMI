@@ -95,7 +95,7 @@ jobs:
         run: |
           kubectl apply -f k8s/deployment.yml
           kubectl apply -f k8s/service.yml
-          kubectl set image deployment/devops-project-fmi app="$($env:IMAGE):sha-${{ github.sha }}"
+          kubectl set image deployment/devops-project-fmi app="$($env:IMAGE):sha-$($env:GITHUB_SHA)"
           kubectl rollout status deployment/devops-project-fmi
           kubectl get pods -l app=devops-project-fmi
 
