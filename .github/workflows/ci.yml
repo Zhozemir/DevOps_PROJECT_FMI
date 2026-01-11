@@ -34,18 +34,6 @@ jobs:
       - name: Build & Test
         run: ./mvnw -B clean test
 
-      - name: SonarCloud Scan (SAST)
-        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ./mvnw -B -DskipTests \
-            -Dsonar.host.url="https://sonarcloud.io" \
-            -Dsonar.organization="zhozemir" \
-            -Dsonar.projectKey="Zhozemir_DevOps_PROJECT_FMI" \
-            org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar
-
       - name: Docker build
         if: github.event_name == 'pull_request'
         run: docker build -t devops_project_fmi:ci .
@@ -79,40 +67,4 @@ jobs:
           tags: |
             ${{ steps.vars.outputs.IMAGE }}:latest
             ${{ steps.vars.outputs.IMAGE }}:sha-${{ github.sha }}
-
-  deploy-to-k8s:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build-and-test
-    runs-on: [ self-hosted, Windows, X64 ]
-
-    defaults:
-      run:
-        shell: powershell
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Write kubeconfig from secret
-        run: |
-          $kubeconfigPath = Join-Path $env:RUNNER_TEMP "kubeconfig"
-          @'
-          ${{ secrets.KUBECONFIG }}
-          '@ | Set-Content -Path $kubeconfigPath -Encoding UTF8
-          Add-Content $env:GITHUB_ENV "KUBECONFIG=$kubeconfigPath"
-
-      - name: Set image name (lowercase)
-        run: |
-          $img = ("ghcr.io/${{ github.repository }}").ToLower()
-          Add-Content $env:GITHUB_ENV "IMAGE=$img"
-
-      - name: Deploy manifests
-        run: |
-          kubectl apply -f k8s/deployment.yml
-          kubectl apply -f k8s/service.yml
-          kubectl set image deployment/devops-project-fmi app="$($env:IMAGE):sha-$($env:GITHUB_SHA)"
-          kubectl annotate deployment/devops-project-fmi kubernetes.io/change-cause="deploy sha-$($env:GITHUB_SHA)" --overwrite
-          kubectl rollout status deployment/devops-project-fmi
-          kubectl get pods -l app=devops-project-fmi
-
 
