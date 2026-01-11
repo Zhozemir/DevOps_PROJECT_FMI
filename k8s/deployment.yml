@@ -6,6 +6,7 @@ metadata:
     app: devops-project-fmi
 spec:
   replicas: 2
+  revisionHistoryLimit: 2
   selector:
     matchLabels:
       app: devops-project-fmi
