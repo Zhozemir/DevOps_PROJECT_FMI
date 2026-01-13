@@ -30,8 +30,21 @@ jobs:
       - name: Make mvnw executable
         run: chmod +x mvnw
 
-      - name: Compile (needed for Sonar Java analysis)
-        run: ./mvnw -B -DskipTests clean compile
+      - name: Run tests + generate coverage
+        run: ./mvnw -B clean test
+
+      - name: SonarCloud Scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./mvnw -B \
+            -Dsonar.host.url="https://sonarcloud.io" \
+            -Dsonar.organization="zhozemir" \
+            -Dsonar.projectKey="Zhozemir_DevOps_PROJECT_FMI" \
+            -Dsonar.java.binaries="target/classes" \
+            -Dsonar.coverage.jacoco.xmlReportPaths="target/site/jacoco/jacoco.xml" \
+            org.sonarsource.scanner.maven:sonar-maven-plugin:4.0.0.4121:sonar
 
       - name: SonarCloud Scan
         env:
