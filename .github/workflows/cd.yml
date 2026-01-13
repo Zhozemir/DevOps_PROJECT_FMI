@@ -31,19 +31,29 @@ jobs:
         run: |
           $sha = "${{ github.event.workflow_run.head_sha }}"
           $repo = "${{ github.repository }}"
-
+          
           $headers = @{
             Authorization = "Bearer $env:GITHUB_TOKEN"
             Accept        = "application/vnd.github+json"
           }
-
+          
           $url = "https://api.github.com/repos/$repo/actions/workflows/sast.yml/runs?branch=main&event=push&per_page=50"
-          $resp = Invoke-RestMethod -Uri $url -Headers $headers
-
-          $run = $resp.workflow_runs | Where-Object { $_.head_sha -eq $sha } | Select-Object -First 1
+          
+          $run = $null
+          for ($i = 1; $i -le 40; $i++) {
+            $resp = Invoke-RestMethod -Uri $url -Headers $headers
+            $run = $resp.workflow_runs | Where-Object { $_.head_sha -eq $sha } | Select-Object -First 1
+          
+            if ($run -and $run.status -eq "completed") { break }
+          
+            Write-Host "Waiting for SAST to complete for sha=$sha (attempt $i/40)..."
+            Start-Sleep -Seconds 15
+          }
+          
           if (-not $run) { throw "No SAST run found for sha=$sha" }
+          if ($run.status -ne "completed") { throw "SAST not completed for sha=$sha (status=$($run.status))" }
           if ($run.conclusion -ne "success") { throw "SAST not successful for sha=$sha. conclusion=$($run.conclusion)" }
-
+          
           Write-Host "SAST passed for $sha"
 
       - name: Write kubeconfig from secret
